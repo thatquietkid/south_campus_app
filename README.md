@@ -67,7 +67,7 @@ To set up the project on your local machine, follow these steps:
 ## Project Structure
 
 The project structure is organized as follows:
-
+```
 south_campus_app/
   lib/
     main.dart            # Entry point of the Flutter application
@@ -88,6 +88,7 @@ south_campus_app/
     widgets/           # Reusable widgets
       ...
   ...
+```
 
 ## Contributing Guidelines
 
