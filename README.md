@@ -32,7 +32,7 @@ To set up the project on your local machine, follow these steps:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone <repository_url>  # Replace <repository_url> with the actual URL of your Git repository
+    git clone https://github.com/thatquietkid/south_campus_app
     cd south_campus_app
     ```
 
