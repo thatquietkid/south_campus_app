@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class AcademicsScreen extends StatefulWidget {
   const AcademicsScreen({super.key});
@@ -48,95 +50,15 @@ class _AcademicsScreenState extends State<AcademicsScreen> with TickerProviderSt
   }
 }
 
-class _CoursesTab extends StatelessWidget {
-  const _CoursesTab();
-
-  final List<Map<String, String>> _courses = const [
-    {'code': 'CS101', 'name': 'Introduction to Computer Science'},
-    {'code': 'MA101', 'name': 'Calculus I'},
-    {'code': 'PH101', 'name': 'Physics I'},
-    {'code': 'EN101', 'name': 'English Composition'},
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: _courses.length,
-      itemBuilder: (context, index) {
-        final course = _courses[index];
-        return Card(
-          margin: const EdgeInsets.all(8.0),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(course['name'] ?? 'Course Name Unavailable',
-                    style: const TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4.0),
-                Text('Code: ${course['code'] ?? 'Code Unavailable'}'),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _AttendanceTab extends StatefulWidget {
-  const _AttendanceTab();
-
-  @override
-  State<_AttendanceTab> createState() => _AttendanceTabState();
-}
-
-class _AttendanceTabState extends State<_AttendanceTab> {
-  final Map<String, double> _attendance = {
+class DataStore {
+  static const attendance = {
     'CS101': 0.85,
     'MA101': 0.92,
     'PH101': 0.78,
     'EN101': 0.88,
   };
 
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: _attendance.length,
-      itemBuilder: (context, index) {
-        final courseCode = _attendance.keys.elementAt(index);
-        final percentage = _attendance.values.elementAt(index);
-        return Card(
-          margin: const EdgeInsets.all(8.0),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(courseCode, style: const TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4.0),
-                Text('Attendance: ${(percentage * 100).toStringAsFixed(1)}%'),
-                const SizedBox(height: 8.0),
-                LinearProgressIndicator(value: percentage),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _SyllabusTab extends StatefulWidget {
-  const _SyllabusTab();
-
-  @override
-  State<_SyllabusTab> createState() => _SyllabusTabState();
-}
-
-class _SyllabusTabState extends State<_SyllabusTab> {
-  String? _selectedCourse;
-  final Map<String, Map<String, List<String>>> _courseSyllabi = const {
+  static const syllabi = {
     'Introduction to Computer Science': {
       'Unit 1: Basics of Computing': ['Introduction to computers', 'Hardware and Software', 'Operating Systems'],
       'Unit 2: Programming Fundamentals': ['Data types', 'Control structures', 'Functions'],
@@ -166,10 +88,133 @@ class _SyllabusTabState extends State<_SyllabusTab> {
       'Unit 5: Literary Analysis': ['Interpreting texts', 'Identifying themes', 'Analyzing literary devices'],
     },
   };
+}
 
-  List<String> get _courseNames => _courseSyllabi.keys.toList();
+class _CoursesTab extends StatefulWidget {
+  const _CoursesTab();
 
-  Map<String, List<String>>? get _selectedSyllabus => _selectedCourse != null ? _courseSyllabi[_selectedCourse] : null;
+  @override
+  State<_CoursesTab> createState() => _CoursesTabState();
+}
+
+class _CoursesTabState extends State<_CoursesTab> {
+  late Future<List<Map<String, dynamic>>> _coursesFuture;
+
+  Future<List<Map<String, dynamic>>> _fetchCourses() async {
+    final url = Uri.parse('https://south-campus-backend.onrender.com/courses');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = json.decode(response.body);
+      return data.map((item) {
+        return {
+          'code': item['code'] ?? '',
+          'name': item['title'] ?? '',
+        };
+      }).toList();
+    } else {
+      throw Exception('Failed to load courses');
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _coursesFuture = _fetchCourses();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _coursesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No courses available.'));
+        } else {
+          final courses = snapshot.data!;
+          return ListView.builder(
+            itemCount: courses.length,
+            itemBuilder: (context, index) {
+              final course = courses[index];
+              return Card(
+                margin: const EdgeInsets.all(8.0),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(course['name'] ?? 'Course Name Unavailable',
+                          style: const TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4.0),
+                      Text('Code: ${course['code'] ?? 'Code Unavailable'}'),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        }
+      },
+    );
+  }
+}
+
+class _AttendanceTab extends StatelessWidget {
+  const _AttendanceTab();
+
+  Color _getColor(double percentage) {
+    if (percentage >= 0.9) return Colors.green;
+    if (percentage >= 0.75) return Colors.orange;
+    return Colors.red;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keys = DataStore.attendance.keys.toList();
+    return ListView.builder(
+      itemCount: keys.length,
+      itemBuilder: (context, index) {
+        final code = keys[index];
+        final percentage = DataStore.attendance[code]!;
+        return Card(
+          margin: const EdgeInsets.all(8.0),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(code, style: const TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4.0),
+                Text('Attendance: ${(percentage * 100).toStringAsFixed(1)}%'),
+                const SizedBox(height: 8.0),
+                LinearProgressIndicator(value: percentage, color: _getColor(percentage)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SyllabusTab extends StatefulWidget {
+  const _SyllabusTab();
+
+  @override
+  State<_SyllabusTab> createState() => _SyllabusTabState();
+}
+
+class _SyllabusTabState extends State<_SyllabusTab> {
+  String? _selectedCourse;
+
+  List<String> get _courseNames => DataStore.syllabi.keys.toList();
+
+  Map<String, List<String>>? get _selectedSyllabus =>
+      _selectedCourse != null ? DataStore.syllabi[_selectedCourse] : null;
 
   @override
   Widget build(BuildContext context) {
@@ -214,32 +259,25 @@ class _SyllabusTabState extends State<_SyllabusTab> {
                   margin: const EdgeInsets.symmetric(vertical: 8.0),
                   child: ExpansionTile(
                     title: Text(unitTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    children: <Widget>[
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: unitTopics
-                              .map((topic) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4.0),
-                            child: Text('- $topic'),
-                          ))
-                              .toList(),
-                        ),
-                      ),
-                    ],
+                    children: unitTopics
+                        .map((topic) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
+                      child: Text('- $topic'),
+                    ))
+                        .toList(),
                   ),
                 );
               },
             ),
           ] else if (_selectedCourse != null) ...[
-            const Text('Syllabus for this course is not available yet.', style: TextStyle(fontStyle: FontStyle.italic)),
+            const Text('Syllabus for this course is not available yet.',
+                style: TextStyle(fontStyle: FontStyle.italic)),
           ] else ...[
-            const Text('Please select a course to view its syllabus.', style: TextStyle(fontStyle: FontStyle.italic)),
+            const Text('Please select a course to view its syllabus.',
+                style: TextStyle(fontStyle: FontStyle.italic)),
           ],
         ],
       ),
     );
   }
 }
-

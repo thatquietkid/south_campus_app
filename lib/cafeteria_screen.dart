@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class CafeteriaScreen extends StatefulWidget {
   const CafeteriaScreen({super.key});
@@ -15,38 +17,43 @@ class _CafeteriaScreenState extends State<CafeteriaScreen> {
     'contact': '011-2766XXXX',
   };
 
-  final List<Map<String, String>> _fullMenu = [
-    {'item': 'Samosa', 'price': '15'},
-    {'item': 'Poha', 'price': '25'},
-    {'item': 'Chole Bhature', 'price': '50'},
-    {'item': 'Rice Plate', 'price': '60'},
-    {'item': 'Noodles', 'price': '40'},
-    {'item': 'Tea', 'price': '10'},
-    {'item': 'Coffee', 'price': '15'},
-    {'item': 'Sandwich (Veg)', 'price': '30'},
-    {'item': 'Pasta (Veg)', 'price': '55'},
-    {'item': 'Maggi', 'price': '20'},
-    {'item': 'Cold Drinks', 'price': '30'},
-    {'item': 'Juice (Mixed Fruit)', 'price': '35'},
-    {'item': 'Roti (2)', 'price': '10'},
-    {'item': 'Sabzi (Seasonal)', 'price': '30'},
-    {'item': 'Dal Makhani', 'price': '45'},
-    {'item': 'Rice (Plain)', 'price': '30'},
-    {'item': 'Salad', 'price': '20'},
-    {'item': 'Burger (Veg)', 'price': '40'},
-    {'item': 'Pizza Slice', 'price': '60'},
-    {'item': 'Manchurian (Veg)', 'price': '50'},
-  ];
-
-  List<Map<String, String>> _filteredMenu = [];
+  List<Map<String, dynamic>> _fullMenu = [];
+  List<Map<String, dynamic>> _filteredMenu = [];
   final TextEditingController _searchController = TextEditingController();
   final Map<String, int> _selectedItems = {}; // Item name -> quantity
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _filteredMenu = List.from(_fullMenu);
+    _fetchMenu();
     _searchController.addListener(_filterMenu);
+  }
+
+  Future<void> _fetchMenu() async {
+    try {
+      final response = await http.get(Uri.parse('https://south-campus-backend.onrender.com/cafeteria-items'));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        setState(() {
+          _fullMenu = data.map((item) => {
+            'item': item['item_name'],
+            'price': item['price'].toString(),
+          }).toList();
+          _filteredMenu = List.from(_fullMenu);
+          _isLoading = false;
+        });
+      } else {
+        throw Exception('Failed to load menu');
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   void _filterMenu() {
@@ -71,7 +78,7 @@ class _CafeteriaScreenState extends State<CafeteriaScreen> {
   void _updateQuantity(String itemName, int change) {
     setState(() {
       if (_selectedItems.containsKey(itemName)) {
-        final newQuantity = (_selectedItems[itemName]! + change).clamp(0, 10); // Limit quantity
+        final newQuantity = (_selectedItems[itemName]! + change).clamp(0, 10);
         if (newQuantity > 0) {
           _selectedItems[itemName] = newQuantity;
         } else {
@@ -84,7 +91,7 @@ class _CafeteriaScreenState extends State<CafeteriaScreen> {
   double get _totalPrice {
     double total = 0;
     _selectedItems.forEach((itemName, quantity) {
-      final item = _fullMenu.firstWhere((element) => element['item'] == itemName);
+      final item = _fullMenu.firstWhere((element) => element['item'] == itemName, orElse: () => {'price': '0'});
       total += double.parse(item['price'] ?? '0') * quantity;
     });
     return total;
@@ -104,7 +111,11 @@ class _CafeteriaScreenState extends State<CafeteriaScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? Center(child: Text('Error: $_error'))
+            : Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
@@ -208,9 +219,11 @@ class _CafeteriaScreenState extends State<CafeteriaScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Total:', style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold)),
+                  const Text('Total:',
+                      style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold)),
                   Text('₹${_totalPrice.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold, color: Colors.blue)),
+                      style: const TextStyle(
+                          fontSize: 16.0, fontWeight: FontWeight.bold, color: Colors.blue)),
                 ],
               ),
             ),
