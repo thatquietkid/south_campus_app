@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class HostelScreen extends StatefulWidget {
   const HostelScreen({super.key});
@@ -8,118 +10,53 @@ class HostelScreen extends StatefulWidget {
 }
 
 class _HostelScreenState extends State<HostelScreen> {
-  final List<Map<String, dynamic>> _hostels = [
-    {
-      'name': 'Aryabhatta Hostel (Boys)',
-      'type': 'Boys',
-      'address': 'Near Science Block A, South Campus',
-      'warden': 'Dr. Sharma',
-      'warden_contact': '9876543210',
-      'caretaker': 'Mr. Verma',
-      'caretaker_contact': '8765432109',
-      'capacity': '150',
-      'available': 35,
-      'facilities': 'Attached bathroom, Mess facility, Common room, Wifi',
-      'color': Colors.blue[100],
-    },
-    {
-      'name': 'Lilavati Hostel (Girls)',
-      'type': 'Girls',
-      'address': 'Opposite Faculty of Arts, South Campus',
-      'warden': 'Dr. Gupta',
-      'warden_contact': '9988776655',
-      'caretaker': 'Ms. Singh',
-      'caretaker_contact': '7766554433',
-      'capacity': '120',
-      'available': 15,
-      'facilities': 'Attached bathroom, Mess facility, Reading room, Laundry service, 24/7 Security',
-      'color': Colors.pink[100],
-    },
-    {
-      'name': 'Tagore International Hostel (Mixed)',
-      'type': 'Mixed',
-      'address': 'Behind Sports Complex, South Campus',
-      'warden': 'Prof. Banerjee',
-      'warden_contact': '9012345678',
-      'caretaker': 'Mr. Khan',
-      'caretaker_contact': '8098765432',
-      'capacity': '180',
-      'available': 60,
-      'facilities': 'Common bathroom, Mess facility, TV room, Indoor games, Guest room',
-      'color': Colors.orange[100],
-    },
-    {
-      'name': 'Vivekananda Hostel (Boys)',
-      'type': 'Boys',
-      'address': 'Next to Library, South Campus',
-      'warden': 'Dr. Reddy',
-      'warden_contact': '9321654870',
-      'caretaker': 'Mr. Patel',
-      'caretaker_contact': '7654321098',
-      'capacity': '160',
-      'available': 20,
-      'facilities': 'Attached bathroom, Mess facility, Computer lab, Sports facilities',
-      'color': Colors.blue[100],
-    },
-    {
-      'name': 'Sarojini Hostel (Girls)',
-      'type': 'Girls',
-      'address': 'Near Cafeteria, South Campus',
-      'warden': 'Dr. Verma',
-      'warden_contact': '9182736450',
-      'caretaker': 'Ms. Sharma',
-      'caretaker_contact': '8574639201',
-      'capacity': '130',
-      'available': 25,
-      'facilities': 'Attached bathroom, Mess facility, Common room, Music room, Medical assistance',
-      'color': Colors.pink[100],
-    },
-    {
-      'name': 'Gandhi House (Boys)',
-      'type': 'Boys',
-      'address': 'Opposite Admin Block, South Campus',
-      'warden': 'Dr. Singh',
-      'warden_contact': '9765432109',
-      'caretaker': 'Mr. Yadav',
-      'caretaker_contact': '8901234567',
-      'capacity': '140',
-      'available': 40,
-      'facilities': 'Attached bathroom, Mess facility, Reading hall, Outdoor games',
-      'color': Colors.blue[100],
-    },
-    {
-      'name': 'Nehru Bhawan (Mixed)',
-      'type': 'Mixed',
-      'address': 'Near Faculty of Science, South Campus',
-      'warden': 'Prof. Joshi',
-      'warden_contact': '9234567890',
-      'caretaker': 'Ms. Kumari',
-      'caretaker_contact': '7098765431',
-      'capacity': '200',
-      'available': 70,
-      'facilities': 'Common bathroom, Mess facility, Seminar room, Library',
-      'color': Colors.orange[100],
-    },
-  ];
-
-  List<Map<String, dynamic>> _filteredHostels = [];
+  List<dynamic> _hostels = []; // Changed to dynamic to hold the JSON response
+  List<dynamic> _filteredHostels = [];
   final TextEditingController _searchController = TextEditingController();
-  String? _selectedFilter; // To hold the selected hostel type filter
+  String? _selectedFilter;
+  bool _isLoading = true; // To track loading state
+  String? _errorMessage; // To display any error messages
 
   @override
   void initState() {
     super.initState();
-    _filteredHostels = List.from(_hostels);
+    _fetchHostels();
     _searchController.addListener(_filterHostels);
   }
 
+  Future<void> _fetchHostels() async {
+    final url = Uri.parse('https://south-campus-backend.onrender.com/hostels');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          _isLoading = false;
+          _hostels = data;
+          _filteredHostels = List.from(data);
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Failed to load hostels: Status code ${response.statusCode}';
+        });
+      }
+    } catch (error) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to connect to the server: $error';
+      });
+    }
+  }
+
   void _filterHostels() {
+    if (_hostels.isEmpty) return; // Avoid filtering if data is not loaded yet
     final query = _searchController.text.toLowerCase();
     setState(() {
       _filteredHostels = _hostels.where((hostel) {
-        final nameMatch = hostel['name'].toString().toLowerCase().contains(query);
-        final addressMatch = hostel['address'].toString().toLowerCase().contains(query);
-        final wardenMatch = hostel['warden'].toString().toLowerCase().contains(query);
+        final nameMatch = hostel['name']?.toString().toLowerCase().contains(query) ?? false;
+        final addressMatch = hostel['address']?.toString().toLowerCase().contains(query) ?? false;
+        final wardenMatch = hostel['warden']?.toString().toLowerCase().contains(query) ?? false;
         return nameMatch || addressMatch || wardenMatch;
       }).toList();
       if (_selectedFilter != null && _selectedFilter != 'All') {
@@ -131,7 +68,7 @@ class _HostelScreenState extends State<HostelScreen> {
   void _applyTypeFilter(String? type) {
     setState(() {
       _selectedFilter = type;
-      _filterHostels(); // Re-apply the text filter after type filter
+      _filterHostels();
     });
   }
 
@@ -143,6 +80,28 @@ class _HostelScreenState extends State<HostelScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('Hostels'),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Hostels'),
+        ),
+        body: Center(
+          child: Text(_errorMessage!),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hostels'),
@@ -190,7 +149,7 @@ class _HostelScreenState extends State<HostelScreen> {
                 final hostel = _filteredHostels[index];
                 return Card(
                   margin: const EdgeInsets.all(8.0),
-                  color: hostel['color'] ?? Colors.grey[200],
+                  color: Colors.grey[200], // Removed hostel['color'] as it's not in the API response
                   child: ExpansionTile(
                     title: Text(hostel['name'] ?? 'Hostel Name Unavailable',
                         style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -206,10 +165,10 @@ class _HostelScreenState extends State<HostelScreen> {
                             _buildContactOption('Contact Warden', hostel['warden_contact']),
                             _buildDetailRow('Caretaker', hostel['caretaker']),
                             _buildContactOption('Contact Caretaker', hostel['caretaker_contact']),
-                            _buildDetailRow('Capacity', hostel['capacity']),
+                            _buildDetailRow('Capacity', hostel['capacity']?.toString()),
                             _buildDetailRow('Available Rooms', hostel['available']?.toString()),
                             _buildDetailRow('Facilities', hostel['facilities']),
-                            // Add more details as needed
+                            // Add more details as needed based on your API response
                           ],
                         ),
                       ),
@@ -249,7 +208,7 @@ class _HostelScreenState extends State<HostelScreen> {
           const SizedBox(width: 8.0),
           InkWell(
             onTap: () {
-              // TODO: Implement phone call functionality
+              // TODO: Implement phone call functionality using url_launcher package
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Calling $label ($contact) - Not implemented')),
               );
