@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class ComplaintsScreen extends StatefulWidget {
   const ComplaintsScreen({super.key});
@@ -16,66 +18,9 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> with TickerProvider
   String? _selectedCategory;
 
   final List<String> _complaintCategories = ['Infrastructure', 'Mess/Cafeteria', 'Cleanliness', 'Academics', 'Other'];
-  final List<Map<String, String>> _allComplaints = [
-    {
-      'name': 'John Doe',
-      'email': 'john.doe@example.com',
-      'subject': 'Leaky Faucet in Hostel Bathroom',
-      'description': 'The faucet in bathroom number 3 on the second floor of Aryabhatta Hostel is constantly dripping. This is wasting water and is quite noisy.',
-      'status': 'Pending'
-    },
-    {
-      'name': 'Jane Smith',
-      'email': 'jane.smith@example.com',
-      'subject': 'Poor Food Quality in Mess',
-      'description': 'The food served in the mess, especially during dinner, has been consistently of poor quality. The vegetables are often undercooked, and the taste is not satisfactory.',
-      'status': 'Resolved'
-    },
-    {
-      'name': 'Peter Jones',
-      'email': 'peter.jones@example.com',
-      'subject': 'Classroom AC Not Working',
-      'description': 'The air conditioning unit in classroom 101 of the Science Block A has been malfunctioning for the past week. It gets very hot and uncomfortable during lectures.',
-      'status': 'In Progress'
-    },
-    {
-      'name': 'Alice Brown',
-      'email': 'alice.brown@example.com',
-      'subject': 'Unavailability of Books in Library',
-      'description': 'Several key textbooks required for the upcoming exams are currently unavailable in the library. This is hindering our studies.',
-      'status': 'Pending'
-    },
-    {
-      'name': 'Bob Green',
-      'email': 'bob.green@example.com',
-      'subject': 'Cleanliness Issue in Common Area',
-      'description': 'The common area on the ground floor of the academic building is often unclean with litter and spills not being promptly addressed.',
-      'status': 'Resolved'
-    },
-    {
-      'name': 'Charlie White',
-      'email': 'charlie.white@example.com',
-      'subject': 'Network Connectivity Issues',
-      'description': 'The Wi-Fi connectivity in the hostel common room has been unreliable for the past few days, making it difficult to study and access online resources.',
-      'status': 'Pending'
-    },
-    {
-      'name': 'Diana Black',
-      'email': 'diana.black@example.com',
-      'subject': 'Noise Disturbance in Residential Area',
-      'description': 'There has been excessive noise coming from the open grounds late at night, disturbing the sleep of residents in the nearby hostels.',
-      'status': 'In Progress'
-    },
-    {
-      'name': 'Ethan Grey',
-      'email': 'ethan.grey@example.com',
-      'subject': 'Suggestion for More Dustbins',
-      'description': 'I would like to suggest placing more dustbins around the campus, especially near the cafeteria and common gathering spots, to help maintain cleanliness.',
-      'status': 'Acknowledged'
-    },
-  ];
-
-  List<Map<String, String>> _filteredComplaints = [];
+  List<Map<String, String>> _complaints = [];
+  // Store the original fetched complaints
+  List<Map<String, dynamic>> _fetchedComplaints = []; // Change to dynamic
   String? _selectedStatusFilter;
   List<String> _statusFilters = ['All', 'Pending', 'Resolved', 'In Progress', 'Acknowledged', 'Submitted'];
 
@@ -85,50 +30,98 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> with TickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _filteredComplaints = List.from(_allComplaints);
-    _applyFilters();
+    _fetchComplaints();
   }
 
-  void _submitComplaint() {
-    if (_formKey.currentState!.validate()) {
-      final name = _nameController.text;
-      final email = _emailController.text;
-      final subject = _subjectController.text;
-      final description = _descriptionController.text;
-      final category = _selectedCategory ?? 'Other';
+  Future<void> _fetchComplaints() async {
+    try {
+      final response = await http.get(Uri.parse('https://south-campus-backend.onrender.com/complaints'));
 
-      setState(() {
-        _allComplaints.add({
-          'name': name,
-          'email': email,
-          'subject': subject,
-          'description': description,
-          'status': 'Submitted'
+      if (response.statusCode == 200) {
+        List<dynamic> fetchedComplaints = json.decode(response.body);
+        setState(() {
+          _fetchedComplaints = List<Map<String, dynamic>>.from(fetchedComplaints.map((complaint) { // Change to dynamic
+            return {
+              'name': complaint['name'],
+              'email': complaint['email'],
+              'subject': complaint['subject'],
+              'description': complaint['description'],
+              'status': complaint['status'],
+            };
+          }));
+          // Initially, show all fetched complaints
+          _complaints = _fetchedComplaints.map((e) => e.cast<String, String>()).toList();
         });
-        _filteredComplaints = List.from(_allComplaints);
-        _applyFilters();
-        _nameController.clear();
-        _emailController.clear();
-        _subjectController.clear();
-        _descriptionController.clear();
-        _selectedCategory = null;
-        _tabController.animateTo(1); // Switch to the 'Your Complaints' tab
-      });
+      } else {
+        throw Exception('Failed to load complaints');
+      }
+    } catch (e) {
+      print("Error fetching complaints: $e");
+    }
+  }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Complaint submitted successfully!')),
-      );
+  Future<void> _submitComplaint() async {
+    if (_formKey.currentState!.validate()) {
+      final complaintData = {
+        'name': _nameController.text,
+        'email': _emailController.text,
+        'subject': _subjectController.text,
+        'description': _descriptionController.text,
+        'status': 'Submitted', // Default status
+      };
+
+      try {
+        final response = await http.post(
+          Uri.parse('https://south-campus-backend.onrender.com/complaints'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(complaintData),
+        );
+
+        if (response.statusCode == 201) {
+          // On success, reload complaints list
+          _fetchComplaints();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Complaint submitted successfully!')),
+          );
+        } else {
+          throw Exception('Failed to submit complaint');
+        }
+      } catch (e) {
+        print("Error submitting complaint: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to submit complaint')),
+        );
+      }
+
+      // Clear the form after submission
+      _nameController.clear();
+      _emailController.clear();
+      _subjectController.clear();
+      _descriptionController.clear();
+      setState(() {
+        _selectedCategory = null;
+      });
+      _tabController.animateTo(1); // Switch to the 'Your Complaints' tab
     }
   }
 
   void _applyFilters() {
     setState(() {
-      _filteredComplaints = List.from(_allComplaints);
+      // Create a copy of the original fetched complaints
+      List<Map<String, String>> filteredComplaints = _fetchedComplaints.map((e) => e.cast<String, String>()).toList();
+
+      // Apply the status filter if a status is selected (and it's not "All")
       if (_selectedStatusFilter != null && _selectedStatusFilter != 'All') {
-        _filteredComplaints = _filteredComplaints.where((complaint) => complaint['status']?.toLowerCase() == _selectedStatusFilter?.toLowerCase()).toList();
+        filteredComplaints = filteredComplaints.where((complaint) {
+          return complaint['status']?.toLowerCase() == _selectedStatusFilter?.toLowerCase();
+        }).toList();
       }
-      // Add sorting logic here if needed
-      _filteredComplaints.sort((a, b) => a['status']?.compareTo(b['status'] ?? '') ?? 0); // Sort by status alphabetically as a basic example
+
+      // Sort the filtered list
+      filteredComplaints.sort((a, b) => a['status']?.compareTo(b['status'] ?? '') ?? 0);
+
+      // Update the displayed complaints
+      _complaints = filteredComplaints;
     });
   }
 
@@ -283,68 +276,65 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> with TickerProvider
           ),
         ),
         Expanded(
-          child: _filteredComplaints.isEmpty
+          child: _complaints.isEmpty
               ? const Center(child: Text('No complaints found with the selected filters.'))
               : ListView.builder(
-                  itemCount: _filteredComplaints.length,
-                  itemBuilder: (context, index) {
-                    final complaint = _filteredComplaints[index];
-                    final statusColor = _getStatusColor(complaint['status'] ?? '');
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      shape: RoundedRectangleBorder(
-                        side: BorderSide(color: statusColor, width: 1.5),
-                        borderRadius: BorderRadius.circular(4.0),
+            itemCount: _complaints.length,
+            itemBuilder: (context, index) {
+              final complaint = _complaints[index];
+              final statusColor = _getStatusColor(complaint['status'] ?? '');
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                shape: RoundedRectangleBorder(
+                  side: BorderSide(color: statusColor, width: 1.5),
+                  borderRadius: BorderRadius.circular(4.0),
+                ),
+                child: ExpansionTile(
+                  title: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        complaint['subject'] ?? 'Subject Unavailable',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      child: ExpansionTile(
-                        title: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              complaint['subject'] ?? 'Subject Unavailable',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 4.0),
-                            Text(
-                              'Status: ${complaint['status'] ?? 'Status Unavailable'}',
-                              style: TextStyle(color: statusColor, fontWeight: FontWeight.w500),
-                            ),
-                          ],
-                        ),
+                      const SizedBox(height: 4.0),
+                      Text(
+                        'Status: ${complaint['status'] ?? 'Status Unavailable'}',
+                        style: TextStyle(color: statusColor, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                _buildDetailRow('Name', complaint['name']),
-                                _buildDetailRow('Email', complaint['email']),
-                                const SizedBox(height: 8.0),
-                                const Text('Description:', style: TextStyle(fontWeight: FontWeight.bold)),
-                                Text(complaint['description'] ?? 'No description provided.'),
-                              ],
-                            ),
-                          ),
+                          _buildDetailRow('Name', complaint['name']),
+                          _buildDetailRow('Email', complaint['email']),
+                          const SizedBox(height: 8.0),
+                          const Text('Description:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4.0),
+                          Text(complaint['description'] ?? 'No description provided'),
                         ],
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
+              );
+            },
+          ),
         ),
       ],
     );
   }
 
   Widget _buildDetailRow(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-          Expanded(child: Text(value ?? 'Not Available')),
-        ],
-      ),
+    return Row(
+      children: [
+        Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(value ?? 'N/A'),
+      ],
     );
   }
 
@@ -353,21 +343,28 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> with TickerProvider
     return Scaffold(
       appBar: AppBar(
         title: const Text('Complaints'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchComplaints,
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(text: 'Submit Complaint'),
+            Tab(text: 'Submit a Complaint'),
             Tab(text: 'Your Complaints'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildComplaintForm(),
-          _buildComplaintList(),
+        children: <Widget>[
+          _buildComplaintForm(), // Tab 1: Form for submitting complaints
+          _buildComplaintList(), // Tab 2: List of complaints
         ],
       ),
     );
   }
 }
+

@@ -51,13 +51,7 @@ class _AcademicsScreenState extends State<AcademicsScreen> with TickerProviderSt
 }
 
 class DataStore {
-  static const attendance = {
-    'CS101': 0.85,
-    'MA101': 0.92,
-    'PH101': 0.78,
-    'EN101': 0.88,
-  };
-
+  // Attendance data will now be fetched from the API
   static const syllabi = {
     'Introduction to Computer Science': {
       'Unit 1: Basics of Computing': ['Introduction to computers', 'Hardware and Software', 'Operating Systems'],
@@ -163,8 +157,33 @@ class _CoursesTabState extends State<_CoursesTab> {
   }
 }
 
-class _AttendanceTab extends StatelessWidget {
+class _AttendanceTab extends StatefulWidget {
   const _AttendanceTab();
+
+  @override
+  State<_AttendanceTab> createState() => _AttendanceTabState();
+}
+
+class _AttendanceTabState extends State<_AttendanceTab> {
+  late Future<List<Map<String, dynamic>>> _attendanceFuture;
+
+  Future<List<Map<String, dynamic>>> _fetchAttendance() async {
+    final url = Uri.parse('https://south-campus-backend.onrender.com/course-attendance');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = json.decode(response.body);
+      return data.map((item) {
+        return {
+          'code': item['code'] ?? '',
+          'title': item['title'] ?? '',
+          'attendance_percentage': item['attendance_percentage'] as double? ?? 0.0,
+        };
+      }).toList();
+    } else {
+      throw Exception('Failed to load attendance data');
+    }
+  }
 
   Color _getColor(double percentage) {
     if (percentage >= 0.9) return Colors.green;
@@ -173,29 +192,52 @@ class _AttendanceTab extends StatelessWidget {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _attendanceFuture = _fetchAttendance();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final keys = DataStore.attendance.keys.toList();
-    return ListView.builder(
-      itemCount: keys.length,
-      itemBuilder: (context, index) {
-        final code = keys[index];
-        final percentage = DataStore.attendance[code]!;
-        return Card(
-          margin: const EdgeInsets.all(8.0),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(code, style: const TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4.0),
-                Text('Attendance: ${(percentage * 100).toStringAsFixed(1)}%'),
-                const SizedBox(height: 8.0),
-                LinearProgressIndicator(value: percentage, color: _getColor(percentage)),
-              ],
-            ),
-          ),
-        );
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _attendanceFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No attendance data available.'));
+        } else {
+          final attendanceData = snapshot.data!;
+          return ListView.builder(
+            itemCount: attendanceData.length,
+            itemBuilder: (context, index) {
+              final attendance = attendanceData[index];
+              final code = attendance['code'];
+              final title = attendance['title'];
+              final percentage = attendance['attendance_percentage'] as double;
+              return Card(
+                margin: const EdgeInsets.all(8.0),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(title ?? code ?? 'Course', style: const TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4.0),
+                      Text('Code: $code'),
+                      const SizedBox(height: 4.0),
+                      Text('Attendance: ${(percentage * 100).toStringAsFixed(1)}%'),
+                      const SizedBox(height: 8.0),
+                      LinearProgressIndicator(value: percentage, color: _getColor(percentage)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        }
       },
     );
   }

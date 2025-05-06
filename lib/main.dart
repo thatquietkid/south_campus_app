@@ -68,13 +68,13 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-      //   title: const Text('South Campus'),
+        //   title: const Text('South Campus'),
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
-      //     child: Image.asset(
-      //       'assets/images/logo.jpg', // AppBar logo
-      //       fit: BoxFit.contain,
-      //     ),
+          //     child: Image.asset(
+          //       'assets/images/logo.jpg', // AppBar logo
+          //       fit: BoxFit.contain,
+          //     ),
         ),
       ),
       body: SingleChildScrollView(
@@ -95,15 +95,6 @@ class HomePage extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16.0),
-            // TextField(
-            //   decoration: InputDecoration(
-            //     hintText: 'Search...',
-            //     prefixIcon: const Icon(Icons.search),
-            //     border: OutlineInputBorder(
-            //       borderRadius: BorderRadius.circular(10.0),
-            //     ),
-            //   ),
-            // ),
             const SizedBox(height: 24.0),
             GridView.count(
               shrinkWrap: true,
@@ -151,7 +142,7 @@ class HomePage extends StatelessWidget {
                 _buildFeatureTile(context, 'Complaints', Icons.report_problem, () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const ComplaintsScreen()),
+                    MaterialPageRoute(builder: (context) => ComplaintsScreen()), // Removed 'const'
                   );
                 }),
               ],

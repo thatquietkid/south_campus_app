@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -8,90 +10,46 @@ class EventsScreen extends StatefulWidget {
 }
 
 class _EventsScreenState extends State<EventsScreen> {
-  final List<Map<String, String>> _events = [
-    {
-      'title': 'Orientation Day 2025',
-      'date': 'August 5, 2025',
-      'time': '9:00 AM - 5:00 PM',
-      'venue': 'Main Auditorium',
-      'description': 'Welcome event for all new students with introductory sessions and campus tour.',
-      'contact': 'studentaffairs@southcampus.edu',
-      'category': 'Academic',
-    },
-    {
-      'title': 'Annual Cultural Fest - "Synergy"',
-      'date': 'October 12 - 14, 2025',
-      'time': 'Various timings',
-      'venue': 'Open Grounds & Amphitheater',
-      'description': 'Three days of music, dance, drama, and art competitions. Open to all students and faculty.',
-      'contact': 'culturalcommittee@southcampus.edu',
-      'category': 'Cultural',
-    },
-    {
-      'title': 'Guest Lecture on Quantum Physics',
-      'date': 'September 20, 2025',
-      'time': '2:00 PM - 4:00 PM',
-      'venue': 'Science Block A, Room 201',
-      'description': 'A lecture by renowned physicist Dr. A.P. Sharma on the latest advancements in quantum physics.',
-      'contact': 'physicsdepartment@southcampus.edu',
-      'category': 'Academic',
-    },
-    {
-      'title': 'Inter-Department Sports Meet',
-      'date': 'November 5 - 7, 2025',
-      'time': '9:00 AM onwards',
-      'venue': 'Sports Complex',
-      'description': 'Annual sports competition between different departments. Includes cricket, football, basketball, and more.',
-      'contact': 'sportscommittee@southcampus.edu',
-      'category': 'Sports',
-    },
-    {
-      'title': 'Workshop on Web Development',
-      'date': 'July 15 - 17, 2025',
-      'time': '10:00 AM - 4:00 PM',
-      'venue': 'Computer Science Lab 1 & 2',
-      'description': 'A hands-on workshop on the latest web development technologies and frameworks.',
-      'contact': 'csdepartment@southcampus.edu',
-      'category': 'Academic',
-    },
-    {
-      'title': 'Movie Screening Night',
-      'date': 'August 25, 2025',
-      'time': '7:00 PM - 9:30 PM',
-      'venue': 'Open Lawn near Admin Block',
-      'description': 'Outdoor screening of a popular movie. Bring your blankets and enjoy!',
-      'contact': 'studentcouncil@southcampus.edu',
-      'category': 'Social',
-    },
-    {
-      'title': 'Debate Competition - "The Voice"',
-      'date': 'October 25, 2025',
-      'time': '10:00 AM - 3:00 PM',
-      'venue': 'Law Faculty Auditorium',
-      'description': 'Annual inter-college debate competition on current social and political issues.',
-      'contact': 'debatingclub@southcampus.edu',
-      'category': 'Academic',
-    },
-    {
-      'title': 'Photography Exhibition - "Frames of South Campus"',
-      'date': 'September 10 - 12, 2025',
-      'time': '11:00 AM - 5:00 PM',
-      'venue': 'Art Gallery, Faculty of Arts',
-      'description': 'An exhibition showcasing the best photographs captured by students and faculty of South Campus.',
-      'contact': 'photographyclub@southcampus.edu',
-      'category': 'Cultural',
-    },
-  ];
-
-  List<Map<String, String>> _filteredEvents = [];
+  List<Map<String, dynamic>> _events = [];
+  List<Map<String, dynamic>> _filteredEvents = [];
   final TextEditingController _searchController = TextEditingController();
   String? _selectedCategoryFilter;
 
   @override
   void initState() {
     super.initState();
-    _filteredEvents = List.from(_events);
+    _fetchEvents();
     _searchController.addListener(_filterEvents);
+  }
+
+  Future<void> _fetchEvents() async {
+    final url = Uri.parse('https://south-campus-backend.onrender.com/events');
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonData = json.decode(response.body);
+
+        setState(() {
+          _events = jsonData.map((event) => {
+            'title': event['title'] ?? '',
+            'date': event['date'] ?? '',
+            'time': event['time'] ?? '',
+            'venue': event['venue'] ?? '',
+            'description': event['description'] ?? '',
+            'contact': event['contact'] ?? '',
+            'category': event['category'] ?? '',
+          }).toList();
+
+          _filteredEvents = List.from(_events);
+        });
+      } else {
+        debugPrint('Failed to load events: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error fetching events: $e');
+    }
   }
 
   void _filterEvents() {
@@ -103,8 +61,11 @@ class _EventsScreenState extends State<EventsScreen> {
         final venueMatch = event['venue']?.toLowerCase().contains(query) ?? false;
         return titleMatch || descriptionMatch || venueMatch;
       }).toList();
+
       if (_selectedCategoryFilter != null && _selectedCategoryFilter != 'All') {
-        _filteredEvents = _filteredEvents.where((event) => event['category'] == _selectedCategoryFilter).toList();
+        _filteredEvents = _filteredEvents
+            .where((event) => event['category'] == _selectedCategoryFilter)
+            .toList();
       }
     });
   }
@@ -112,7 +73,7 @@ class _EventsScreenState extends State<EventsScreen> {
   void _applyCategoryFilter(String? category) {
     setState(() {
       _selectedCategoryFilter = category;
-      _filterEvents(); // Re-apply the text filter after category filter
+      _filterEvents();
     });
   }
 
@@ -165,16 +126,20 @@ class _EventsScreenState extends State<EventsScreen> {
             ),
           ),
           Expanded(
-            child: ListView.builder(
+            child: _filteredEvents.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
               itemCount: _filteredEvents.length,
               itemBuilder: (context, index) {
                 final event = _filteredEvents[index];
                 return Card(
                   margin: const EdgeInsets.all(8.0),
                   child: ExpansionTile(
-                    leading: const Icon(Icons.event), // Add a leading icon
-                    title: Text(event['title'] ?? 'Event Title Unavailable',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    leading: const Icon(Icons.event),
+                    title: Text(
+                      event['title'] ?? 'Event Title Unavailable',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     subtitle: Text('${event['date']} | ${event['venue']}'),
                     children: <Widget>[
                       Padding(
@@ -191,7 +156,6 @@ class _EventsScreenState extends State<EventsScreen> {
                             const SizedBox(height: 8.0),
                             _buildDetailRow('Contact', event['contact']),
                             _buildDetailRow('Category', event['category']),
-                            // Add more details if available
                           ],
                         ),
                       ),
